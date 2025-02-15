@@ -1,3 +1,5 @@
+https://github.com/zealvora/certified-kubernetes-administrator/blob/master/Domain%204%20-%20Security/certificate-steps.md
+
 Using `ssh-keygen` to add user permissions in Kubernetes isn't a direct approach, as Kubernetes does not use SSH for authentication. Instead, Kubernetes typically authenticates users through **certificates, service accounts, or an external identity provider (OIDC, LDAP, Azure AD, etc.)**.
 
 However, you **can** use SSH key pairs to create an authentication mechanism for SSH access to worker nodes, but **not directly for Kubernetes RBAC**.
