@@ -1,0 +1,13 @@
+Configure kubectl for the New User with SSH key
+
+Add the user’s credentials to kubectl:
+kubectl config set-credentials <new-user> --client-certificate=new-user.crt --client-key=~/.ssh/id_rsa
+
+Set a new context:
+kubectl config set-context <new-user-context> --cluster=kubernetes --namespace=dev-namespace --user=<new-user>
+
+Switch to the new context:
+kubectl config use-context <new-user-context>
+
+Now, test access:
+kubectl get pods
