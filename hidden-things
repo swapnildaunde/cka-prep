@@ -1,0 +1,8 @@
+# Access kubernetes api inside pod by using service account token path inside pod
+# kubectl cluster-info --- to get cluster url
+# kubectl run nginx --image nginx
+# kubectl exec -it nginx -- bash 
+#cd /var/run/secrets/kubernetes.io/serviceaccount/
+# SA_TOKEN=$(cat token) echo $SA_TOKEN
+# curl -k "ClusterURL/api/v1" -H "Authorization: Bearer $SA_TOKEN"  
+
