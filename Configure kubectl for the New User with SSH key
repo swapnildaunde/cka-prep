@@ -1,13 +1,141 @@
-Configure kubectl for the New User with SSH key
+Using `ssh-keygen` to add user permissions in Kubernetes isn't a direct approach, as Kubernetes does not use SSH for authentication. Instead, Kubernetes typically authenticates users through **certificates, service accounts, or an external identity provider (OIDC, LDAP, Azure AD, etc.)**.
 
-Add the user’s credentials to kubectl:
-kubectl config set-credentials <new-user> --client-certificate=new-user.crt --client-key=~/.ssh/id_rsa
+However, you **can** use SSH key pairs to create an authentication mechanism for SSH access to worker nodes, but **not directly for Kubernetes RBAC**.
 
+---
+
+## **Alternative: Using SSH Keygen for Kubernetes User Authentication**
+If you want to use **SSH keys** for Kubernetes authentication, one option is to use them **to generate a client certificate** that Kubernetes can accept. Here’s how:
+
+### **Step 1: Generate an SSH Key Pair**
+Run the following command on your machine:
+```bash
+ssh-keygen -t rsa -b 4096 -C "new-user"
+```
+- It generates:
+  - **Public key**: `~/.ssh/id_rsa.pub`
+  - **Private key**: `~/.ssh/id_rsa`
+
+---
+
+### **Step 2: Convert the SSH Key to a Kubernetes-Compatible Certificate**
+Kubernetes does not use raw SSH keys for authentication. However, you can **convert an SSH key into a certificate request (CSR)** that Kubernetes can sign.
+
+#### **2.1 Create a Certificate Signing Request (CSR)**
+Use OpenSSL to generate a CSR from your private key:
+```bash
+openssl req -new -key ~/.ssh/id_rsa -out new-user.csr -subj "/CN=new-user/O=developers"
+```
+- `/CN=new-user`: This is the username.
+- `/O=developers`: This is the group (optional).
+
+#### **2.2 Create a Kubernetes CSR Resource**
+Create a CSR request in Kubernetes:
+```yaml
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: new-user-csr
+spec:
+  groups:
+  - system:authenticated
+  request: <BASE64_ENCODED_CSR>
+  signerName: kubernetes.io/kube-apiserver-client
+  usages:
+  - digital signature
+  - key encipherment
+  - client auth
+```
+Replace `<BASE64_ENCODED_CSR>` with the base64-encoded content of `new-user.csr`:
+```bash
+cat new-user.csr | base64 | tr -d '\n'
+```
+Apply it:
+```bash
+kubectl apply -f new-user-csr.yaml
+```
+
+#### **2.3 Approve and Retrieve the Signed Certificate**
+Approve the CSR:
+```bash
+kubectl certificate approve new-user-csr
+```
+Retrieve the signed certificate:
+```bash
+kubectl get csr new-user-csr -o jsonpath='{.status.certificate}' | base64 --decode > new-user.crt
+```
+
+---
+
+### **Step 3: Bind the User to a Role in Kubernetes**
+After generating the certificate, bind the user to a role with appropriate permissions.
+
+#### **3.1 Create a Role**
+Example role to allow the user to list and get pods in a specific namespace:
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: dev-namespace
+  name: pod-reader
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+```
+Apply it:
+```bash
+kubectl apply -f role.yaml
+```
+
+#### **3.2 Bind the Role to the User**
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-reader-binding
+  namespace: dev-namespace
+subjects:
+- kind: User
+  name: new-user  # This must match the CN in the certificate
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+```
+Apply it:
+```bash
+kubectl apply -f rolebinding.yaml
+```
+
+---
+
+### **Step 4: Configure `kubectl` for the New User**
+Add the user’s credentials to `kubectl`:
+```bash
+kubectl config set-credentials new-user --client-certificate=new-user.crt --client-key=~/.ssh/id_rsa
+```
 Set a new context:
-kubectl config set-context <new-user-context> --cluster=kubernetes --namespace=dev-namespace --user=<new-user>
-
+```bash
+kubectl config set-context new-user-context --cluster=kubernetes --namespace=dev-namespace --user=new-user
+```
 Switch to the new context:
-kubectl config use-context <new-user-context>
+```bash
+kubectl config use-context new-user-context
+```
 
 Now, test access:
+```bash
 kubectl get pods
+```
+If everything is configured correctly, the user should only have **read** access to pods in `dev-namespace`.
+
+---
+
+## **Summary**
+- **SSH keys cannot be directly used for Kubernetes authentication**.
+- **You can use an SSH private key (`id_rsa`) to generate a certificate for Kubernetes authentication**.
+- **The user must be assigned an RBAC role to define their permissions**.
+
+Would you like help integrating this into **Azure AKS** or an **existing authentication system**? 🚀
