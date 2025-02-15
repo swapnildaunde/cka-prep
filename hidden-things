@@ -6,3 +6,27 @@
 # SA_TOKEN=$(cat token) echo $SA_TOKEN
 # curl -k "ClusterURL/api/v1" -H "Authorization: Bearer $SA_TOKEN"  
 
+# we can grant permissions to pod with Role and Role binding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: my-namespace
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-reader-binding
+  namespace: my-namespace
+subjects:
+  - kind: ServiceAccount
+    name: my-service-account
+    namespace: my-namespace
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
